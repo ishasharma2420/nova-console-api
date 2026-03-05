@@ -330,9 +330,12 @@ app.post('/nova/predict', async (req, res) => {
     }
 
     const highCount = results.filter(r => r.risk_band === 'High').length;
-    const highRevenue = upcoming
-      .filter((_, i) => results[i]?.risk_band === 'High')
-      .reduce((s, a) => s + (parseFloat(a.revenue_value) || 0), 0);
+    const highRevenue = results
+      .filter(r => r.risk_band === 'High')
+      .reduce((s, r) => {
+        const appt = upcoming.find(a => a.appointment_id === r.appointment_id);
+        return s + (parseFloat(appt?.revenue_value) || 0);
+      }, 0);
 
     res.json({
       success: true,
