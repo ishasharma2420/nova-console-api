@@ -8,6 +8,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Allow embedding in LeadSquared iframe
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
+  res.setHeader('Content-Security-Policy', "frame-ancestors *");
+  next();
+});
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
@@ -501,6 +508,16 @@ app.get('/nova/interventions', async (req, res) => {
     res.json({ success: true, total: withInterventions.length, interventions: withInterventions });
   } catch (err) {
     console.error('Interventions error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── DEBUG: RAW MAVIS ROW ─────────────────────────────────────────────────────
+app.get('/nova/debug', async (req, res) => {
+  try {
+    const rows = await mavisQuery(APPOINTMENTS_TABLE, [{ ColumnId: 'is_upcoming', Value: 'Yes' }], 1);
+    res.json({ success: true, sample_row: rows[0] || null, keys: rows[0] ? Object.keys(rows[0]) : [] });
+  } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
