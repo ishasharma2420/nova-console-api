@@ -505,7 +505,39 @@ app.get('/nova/interventions', async (req, res) => {
   }
 });
 
-// ─── HEALTH CHECK ─────────────────────────────────────────────────────────────
+// ─── ENDPOINT 7: WAITLIST DATA ────────────────────────────────────────────────
+
+app.get('/nova/waitlist', async (req, res) => {
+  try {
+    const { service, clinic } = req.query;
+    const search = [{ ColumnId: 'waitlist_status', Value: 'Active' }];
+    if (service) search.push({ ColumnId: 'preferred_service_line', Value: service });
+    if (clinic) search.push({ ColumnId: 'clinic_location', Value: clinic });
+
+    const waitlist = await mavisQuery(WAITLIST_TABLE, search, 200);
+
+    // Sort by urgency desc, then days_on_waitlist desc
+    waitlist.sort((a, b) => {
+      const urgencyDiff = (parseInt(b.urgency_score) || 0) - (parseInt(a.urgency_score) || 0);
+      if (urgencyDiff !== 0) return urgencyDiff;
+      return (parseInt(b.days_on_waitlist) || 0) - (parseInt(a.days_on_waitlist) || 0);
+    });
+
+    const avgUrgency = waitlist.length
+      ? (waitlist.reduce((s, w) => s + (parseInt(w.urgency_score) || 0), 0) / waitlist.length).toFixed(1)
+      : 0;
+    const avgDays = waitlist.length
+      ? Math.round(waitlist.reduce((s, w) => s + (parseInt(w.days_on_waitlist) || 0), 0) / waitlist.length)
+      : 0;
+
+    res.json({ success: true, total: waitlist.length, avgUrgency, avgDays, waitlist });
+  } catch (err) {
+    console.error('Waitlist error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── ENDPOINT 8: HEALTH CHECK ─────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'Nova Console API', timestamp: new Date().toISOString() });
