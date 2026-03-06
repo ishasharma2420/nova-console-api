@@ -226,14 +226,17 @@ app.get('/nova/dashboard', async (req, res) => {
 
 app.get('/nova/patients', async (req, res) => {
   try {
-    const { band, clinic, service, limit = 100 } = req.query;
+    const { band, clinic, service, limit = 300 } = req.query;
 
-    const filters = [{ ColumnId: 'is_upcoming', Value: 'Yes' }];
-    if (band) filters.push({ ColumnId: 'risk_band', Value: band });
-    if (clinic) filters.push({ ColumnId: 'clinic_location', Value: clinic });
-    if (service) filters.push({ ColumnId: 'service_line', Value: service });
+    // Fetch all appointments — filter client-side since non-queryable fields
+    // can't be used as Mavis search filters reliably
+    const all = await mavisQuery(APPOINTMENTS_TABLE, [], 1500);
 
-    const patients = await mavisQuery(APPOINTMENTS_TABLE, filters, parseInt(limit));
+    // Filter to upcoming only, then apply optional filters
+    let patients = all.filter(a => a.is_upcoming === 'Yes');
+    if (band) patients = patients.filter(a => a.risk_band === band);
+    if (clinic) patients = patients.filter(a => a.clinic_location === clinic);
+    if (service) patients = patients.filter(a => a.service_line === service);
 
     // Sort: High first, then by risk_score desc
     patients.sort((a, b) => {
@@ -243,7 +246,7 @@ app.get('/nova/patients', async (req, res) => {
       return (parseInt(b.risk_score) || 0) - (parseInt(a.risk_score) || 0);
     });
 
-    res.json({ success: true, total: patients.length, patients });
+    res.json({ success: true, total: patients.length, patients: patients.slice(0, parseInt(limit)) });
   } catch (err) {
     console.error('Patients error:', err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -527,11 +530,11 @@ app.get('/nova/debug', async (req, res) => {
 app.get('/nova/waitlist', async (req, res) => {
   try {
     const { service, clinic } = req.query;
-    const search = [{ ColumnId: 'waitlist_status', Value: 'Active' }];
-    if (service) search.push({ ColumnId: 'preferred_service_line', Value: service });
-    if (clinic) search.push({ ColumnId: 'clinic_location', Value: clinic });
 
-    const waitlist = await mavisQuery(WAITLIST_TABLE, search, 200);
+    const all = await mavisQuery(WAITLIST_TABLE, [], 200);
+    let waitlist = all.filter(w => w.waitlist_status === 'Active');
+    if (service) waitlist = waitlist.filter(w => w.preferred_service_line === service);
+    if (clinic) waitlist = waitlist.filter(w => w.clinic_location === clinic);
 
     // Sort by urgency desc, then days_on_waitlist desc
     waitlist.sort((a, b) => {
