@@ -598,30 +598,32 @@ app.get('/nova/lead/:prospectId', async (req, res) => {
 
     const leadData = await lsqGetLeadByProspectId(prospectId);
 
-    // leadData is an array of {Attribute, Value} objects from LSQ
-    const fieldMap = {};
-    if (Array.isArray(leadData)) {
-      leadData.forEach(f => { fieldMap[f.Attribute] = f.Value; });
-    }
+    // LSQ Leads.GetById returns a flat JSON object with property names directly:
+    // { "FirstName": "Richard", "LastName": "Martin", "mx_Appointment_DateTime": "...", ... }
+    // If the response is wrapped in an array (some LSQ versions), unwrap it.
+    const d = Array.isArray(leadData) ? leadData[0] || {} : (leadData || {});
 
-    // Extract the fields we need
+    // Log the raw keys for debugging (remove in production)
+    console.log('Nova Intelligence — LSQ lead keys:', Object.keys(d).filter(k => k.startsWith('mx_')).join(', '));
+
+    // Extract the fields we need — direct property access from the flat object
     const lead = {
       prospectId,
-      firstName: fieldMap['FirstName'] || '',
-      lastName: fieldMap['LastName'] || '',
-      email: fieldMap['EmailAddress'] || '',
-      phone: fieldMap['Phone'] || '',
-      appointmentDateTime: fieldMap['mx_Appointment_DateTime'] || '',
-      appointmentSubType: fieldMap['mx_Appointment_Sub_Type'] || '',
-      noShowRiskScore: fieldMap['mx_No_Show_Risk_Score'] || fieldMap['mx_NoShowRiskScore'] || '',
-      priorNoShows: fieldMap['mx_Prior_No_Shows'] || fieldMap['mx_PriorNoShows'] || '0',
-      riskCategory: fieldMap['mx_Risk_Category'] || '',
-      riskBand: fieldMap['mx_Risk_Band'] || fieldMap['mx_RiskBand'] || '',
-      contributingFactors: fieldMap['mx_Contributing_Factors'] || fieldMap['mx_ContributingFactors'] || '',
-      lastScored: fieldMap['mx_Nova_Console_Last_Scored'] || fieldMap['mx_NovaConsoleLastScored'] || '',
-      appointmentStatus: fieldMap['mx_Appointment_Status'] || '',
-      slotType: fieldMap['mx_Slot_Type'] || '',
-      daysBookedInAdvance: fieldMap['mx_Days_Booked_in_Advanced'] || '',
+      firstName: d.FirstName || '',
+      lastName: d.LastName || '',
+      email: d.EmailAddress || '',
+      phone: d.Phone || d.Mobile || '',
+      appointmentDateTime: d.mx_Appointment_DateTime || '',
+      appointmentSubType: d.mx_Appointment_Sub_Type || '',
+      noShowRiskScore: d.mx_No_Show_Risk_Score || '',
+      priorNoShows: d.mx_Prior_No_Shows || '0',
+      riskCategory: d.mx_Risk_Category || '',
+      riskBand: d.mx_Risk_Band || '',
+      contributingFactors: d.mx_Contributing_Factors || '',
+      lastScored: d.mx_Nova_Console_Last_Scored || '',
+      appointmentStatus: d.mx_Appointment_Status || '',
+      slotType: d.mx_Slot_Type || '',
+      daysBookedInAdvance: d.mx_Days_Booked_in_Advanced || '',
     };
 
     res.json({ success: true, lead });
