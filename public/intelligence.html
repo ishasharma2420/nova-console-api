@@ -577,7 +577,7 @@
           message += ` Want me to draft something quick?`;
         }
       } else {
-        message = `<strong>${escHtml(name)}</strong>'s risk profile looks good (score: ${displayScore}). Their ${escHtml(apptDate)} appointment should be fine, but I can prepare a courtesy reminder if you'd like.`;
+        message = `<strong>${escHtml(name)}</strong>'s risk profile looks good (score: ${displayScore}). Their upcoming appointment${apptDate !== 'an upcoming appointment' ? ' on <strong>' + escHtml(apptDate) + '</strong>' : ''} should be fine, but I can prepare a courtesy reminder if you'd like.`;
       }
 
       return `
