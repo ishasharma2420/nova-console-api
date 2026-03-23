@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const OpenAI = require('openai');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -14,6 +15,9 @@ app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "frame-ancestors *");
   next();
 });
+
+// ─── SERVE STATIC FILES FROM /public ─────────────────────────────────────────
+app.use(express.static(path.join(__dirname, 'public')));
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -31,6 +35,9 @@ const LSQ_SECRET = process.env.LSQ_API_SECRET;
 const APPOINTMENTS_TABLE = process.env.MAVIS_APPOINTMENTS_TABLE;
 const SLOTS_TABLE = process.env.MAVIS_SLOTS_TABLE;
 const WAITLIST_TABLE = process.env.MAVIS_WAITLIST_TABLE;
+
+// Nova Intelligence sender email
+const NOVA_SENDER_EMAIL = process.env.NOVA_SENDER_EMAIL || 'noreply@vanderlynmedical.com';
 
 // ─── MAVIS HELPERS ────────────────────────────────────────────────────────────
 
@@ -71,6 +78,28 @@ async function lsqUpdateLead(prospectId, fields) {
     body,
     { params: { accessKey: LSQ_KEY, secretKey: LSQ_SECRET } }
   );
+}
+
+async function lsqGetLeadByProspectId(prospectId) {
+  const url = `${LSQ_BASE}/LeadManagement.svc/Leads.GetById?accessKey=${LSQ_KEY}&secretKey=${LSQ_SECRET}&id=${prospectId}`;
+  const res = await axios.get(url);
+  return res.data;
+}
+
+async function lsqSendEmail({ recipientEmail, subject, htmlBody, textBody }) {
+  const url = `${LSQ_BASE}/EmailMarketing.svc/SendEmailToLead?accessKey=${LSQ_KEY}&secretKey=${LSQ_SECRET}`;
+  const res = await axios.post(url, {
+    SenderType: 'UserEmailAddress',
+    Sender: NOVA_SENDER_EMAIL,
+    RecipientType: 'LeadEmailAddress',
+    Recipient: recipientEmail,
+    EmailType: 'Html',
+    ContentHTML: htmlBody,
+    ContentText: textBody,
+    Subject: subject,
+    IncludeEmailFooter: true,
+  });
+  return res.data;
 }
 
 // ─── RISK SCORING ─────────────────────────────────────────────────────────────
@@ -553,6 +582,142 @@ app.get('/nova/waitlist', async (req, res) => {
     res.json({ success: true, total: waitlist.length, avgUrgency, avgDays, waitlist });
   } catch (err) {
     console.error('Waitlist error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── NOVA INTELLIGENCE ENDPOINTS ─────────────────────────────────────────────
+
+// GET /nova/lead/:prospectId — Fetch lead data from LeadSquared
+app.get('/nova/lead/:prospectId', async (req, res) => {
+  try {
+    const { prospectId } = req.params;
+    if (!prospectId) {
+      return res.status(400).json({ success: false, error: 'prospectId is required' });
+    }
+
+    const leadData = await lsqGetLeadByProspectId(prospectId);
+
+    // leadData is an array of {Attribute, Value} objects from LSQ
+    const fieldMap = {};
+    if (Array.isArray(leadData)) {
+      leadData.forEach(f => { fieldMap[f.Attribute] = f.Value; });
+    }
+
+    // Extract the fields we need
+    const lead = {
+      prospectId,
+      firstName: fieldMap['FirstName'] || '',
+      lastName: fieldMap['LastName'] || '',
+      email: fieldMap['EmailAddress'] || '',
+      phone: fieldMap['Phone'] || '',
+      appointmentDateTime: fieldMap['mx_Appointment_DateTime'] || '',
+      appointmentSubType: fieldMap['mx_Appointment_Sub_Type'] || '',
+      noShowRiskScore: fieldMap['mx_No_Show_Risk_Score'] || fieldMap['mx_NoShowRiskScore'] || '',
+      priorNoShows: fieldMap['mx_Prior_No_Shows'] || fieldMap['mx_PriorNoShows'] || '0',
+      riskCategory: fieldMap['mx_Risk_Category'] || '',
+      riskBand: fieldMap['mx_Risk_Band'] || fieldMap['mx_RiskBand'] || '',
+      contributingFactors: fieldMap['mx_Contributing_Factors'] || fieldMap['mx_ContributingFactors'] || '',
+      lastScored: fieldMap['mx_Nova_Console_Last_Scored'] || fieldMap['mx_NovaConsoleLastScored'] || '',
+      appointmentStatus: fieldMap['mx_Appointment_Status'] || '',
+      slotType: fieldMap['mx_Slot_Type'] || '',
+      daysBookedInAdvance: fieldMap['mx_Days_Booked_in_Advanced'] || '',
+    };
+
+    res.json({ success: true, lead });
+  } catch (err) {
+    console.error('Nova Intelligence lead fetch error:', err.response?.data || err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /nova/draft-email — Generate a personalized email draft via OpenAI
+app.post('/nova/draft-email', async (req, res) => {
+  try {
+    const { lead } = req.body;
+    if (!lead) {
+      return res.status(400).json({ success: false, error: 'lead data is required' });
+    }
+
+    const apptDate = lead.appointmentDateTime
+      ? new Date(lead.appointmentDateTime).toLocaleDateString('en-US', {
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+          hour: 'numeric', minute: '2-digit',
+        })
+      : 'your upcoming appointment';
+
+    const systemPrompt = `You are a professional medical office coordinator at Vanderlyn Medical Center. Write a warm, professional appointment confirmation/reminder email. The email should:
+- Be written FROM the clinic (not from an AI)
+- Address the patient by first name
+- Reference the specific appointment date/time and service type
+- Politely ask them to confirm their attendance or contact the office if they need to reschedule
+- Include clinic contact info: (555) 234-8900
+- Be concise — 4-6 sentences max for the body
+- Sign off as "The Scheduling Team at Vanderlyn Medical Center"
+- Do NOT mention risk scores, no-show history, or AI predictions
+
+Return ONLY a JSON object with two keys: "subject" and "body". The body should be the email text (not HTML). No markdown, no backticks, just raw JSON.`;
+
+    const userPrompt = `Patient: ${lead.firstName} ${lead.lastName}
+Appointment: ${apptDate}
+Service: ${lead.appointmentSubType || 'Medical Appointment'}
+Email: ${lead.email}`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: 500,
+      temperature: 0.7,
+    });
+
+    let content = response.choices[0].message.content.trim();
+    // Strip markdown code fences if present
+    content = content.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+
+    let draft;
+    try {
+      draft = JSON.parse(content);
+    } catch {
+      // Fallback if JSON parse fails
+      draft = {
+        subject: `Appointment Reminder — ${apptDate}`,
+        body: content,
+      };
+    }
+
+    res.json({ success: true, draft });
+  } catch (err) {
+    console.error('Nova Intelligence draft-email error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /nova/send-email — Send approved email via LeadSquared Email API
+app.post('/nova/send-email', async (req, res) => {
+  try {
+    const { recipientEmail, subject, body, patientName } = req.body;
+    if (!recipientEmail || !subject || !body) {
+      return res.status(400).json({ success: false, error: 'recipientEmail, subject, and body are required' });
+    }
+
+    // Convert plain text body to simple HTML
+    const htmlBody = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333;">
+${body.split('\n').map(line => `<p style="margin: 0 0 12px 0;">${line}</p>`).join('\n')}
+</div>`;
+
+    const result = await lsqSendEmail({
+      recipientEmail,
+      subject,
+      htmlBody,
+      textBody: body,
+    });
+
+    res.json({ success: true, message: `Email sent to ${patientName || recipientEmail}`, result });
+  } catch (err) {
+    console.error('Nova Intelligence send-email error:', err.response?.data || err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
