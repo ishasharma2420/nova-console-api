@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nova Intelligence</title>
+  <style>
+    /* ── RESET & BASE ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --surface-alt: #f0f2f5;
+      --border: #e2e5ea;
+      --border-light: #eef0f3;
+      --text: #1a1d23;
+      --text-secondary: #5f6672;
+      --text-muted: #8d94a0;
+      --accent: #4f6ef7;
+      --accent-soft: #eef1fe;
+      --high: #e63946;
+      --high-bg: #fef2f2;
+      --high-border: #fecaca;
+      --medium: #e9a319;
+      --medium-bg: #fffbeb;
+      --medium-border: #fde68a;
+      --low: #10b981;
+      --low-bg: #ecfdf5;
+      --low-border: #a7f3d0;
+      --agent-bg: #f8f9ff;
+      --agent-border: #c7d2fe;
+      --success: #059669;
+      --success-bg: #ecfdf5;
+      --radius: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.06);
+      --shadow: 0 2px 8px rgba(0,0,0,.08);
+      --font: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    }
+
+    html, body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── LAYOUT ────────────────────────────────────────────────────── */
+    .nova-shell {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    /* ── HEADER ────────────────────────────────────────────────────── */
+    .nova-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .nova-header-icon {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, #4f6ef7, #818cf8);
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .nova-header-icon svg { width: 18px; height: 18px; }
+    .nova-header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .nova-header span {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 400;
+      display: block;
+      margin-top: 1px;
+    }
+
+    /* ── LOADING STATE ─────────────────────────────────────────────── */
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      gap: 16px;
+    }
+    .loading-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .loading-dots div {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .loading-dots div:nth-child(2) { animation-delay: .15s; }
+    .loading-dots div:nth-child(3) { animation-delay: .3s; }
+    @keyframes pulse {
+      0%, 100% { opacity: .25; transform: scale(.85); }
+      50% { opacity: 1; transform: scale(1); }
+    }
+    .loading-state p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* ── ERROR STATE ───────────────────────────────────────────────── */
+    .error-state {
+      background: var(--high-bg);
+      border: 1px solid var(--high-border);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+    }
+    .error-state h3 { color: var(--high); font-size: 14px; margin-bottom: 6px; }
+    .error-state p { color: var(--text-secondary); font-size: 13px; }
+    .error-state button {
+      margin-top: 12px;
+      padding: 7px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--high-border);
+      background: white;
+      color: var(--high);
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    /* ── PATIENT CARD ──────────────────────────────────────────────── */
+    .patient-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .patient-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .patient-name {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    .patient-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .risk-badge.high { background: var(--high-bg); color: var(--high); border: 1px solid var(--high-border); }
+    .risk-badge.medium { background: var(--medium-bg); color: #92630d; border: 1px solid var(--medium-border); }
+    .risk-badge.low { background: var(--low-bg); color: #065f46; border: 1px solid var(--low-border); }
+    .risk-badge .score { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+
+    .patient-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 20px;
+    }
+    .detail-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .detail-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      font-weight: 500;
+    }
+    .detail-value {
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .factors-row {
+      grid-column: 1 / -1;
+      margin-top: 2px;
+    }
+    .factors-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 3px;
+    }
+    .factor-tag {
+      font-size: 11px;
+      background: var(--surface-alt);
+      color: var(--text-secondary);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border-light);
+    }
+
+    /* ── AGENT MESSAGE ─────────────────────────────────────────────── */
+    .agent-message {
+      background: var(--agent-bg);
+      border: 1px solid var(--agent-border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      margin-bottom: 16px;
+      position: relative;
+      animation: slideIn .35s ease-out;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .agent-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 8px;
+    }
+    .agent-label svg { width: 14px; height: 14px; }
+    .agent-text {
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .agent-text strong { font-weight: 600; }
+
+    /* ── ACTION BUTTONS ────────────────────────────────────────────── */
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all .15s ease;
+    }
+    .btn:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+    .btn svg { width: 15px; height: 15px; }
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+    .btn-primary:hover:not(:disabled) { background: #3b5de7; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover:not(:disabled) { background: var(--surface-alt); }
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+    .btn-success:hover:not(:disabled) { background: #047857; }
+
+    /* ── EMAIL EDITOR ──────────────────────────────────────────────── */
+    .email-editor {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+      animation: slideIn .35s ease-out;
+    }
+    .email-editor h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .email-editor h3 svg { width: 15px; height: 15px; color: var(--accent); }
+    .email-field {
+      margin-bottom: 12px;
+    }
+    .email-field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: 4px;
+    }
+    .email-field input,
+    .email-field textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 9px 12px;
+      font-family: var(--font);
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg);
+      resize: vertical;
+      transition: border-color .15s;
+    }
+    .email-field input:focus,
+    .email-field textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .email-field textarea { min-height: 180px; line-height: 1.6; }
+
+    /* ── SUCCESS TOAST ─────────────────────────────────────────────── */
+    .success-card {
+      background: var(--success-bg);
+      border: 1px solid var(--low-border);
+      border-left: 3px solid var(--success);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      animation: slideIn .35s ease-out;
+    }
+    .success-card h3 {
+      color: var(--success);
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .success-card h3 svg { width: 16px; height: 16px; }
+    .success-card p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ── SPINNER INLINE ────────────────────────────────────────────── */
+    .spinner-inline {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      display: inline-block;
+    }
+    .spinner-inline.dark {
+      border-color: rgba(0,0,0,.1);
+      border-top-color: var(--accent);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── NO EMAIL STATE ────────────────────────────────────────────── */
+    .no-email-note {
+      background: var(--medium-bg);
+      border: 1px solid var(--medium-border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #92630d;
+      margin-top: 10px;
+    }
+
+    /* ── RESPONSIVE ────────────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .nova-shell { padding: 12px 10px 30px; }
+      .patient-details { grid-template-columns: 1fr; }
+      .actions { flex-direction: column; }
+      .btn { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="nova-shell" id="app">
+    <!-- Populated by JS -->
+  </div>
+
+  <script>
+    // ─── CONFIG ──────────────────────────────────────────────────────
+    const API_BASE = window.location.origin;
+    const prospectId = new URLSearchParams(window.location.search).get('pid');
+
+    // ─── STATE ───────────────────────────────────────────────────────
+    let state = {
+      phase: 'loading',  // loading | error | ready | drafting | editing | sending | sent
+      lead: null,
+      error: null,
+      draft: null,
+    };
+
+    // ─── RENDER ENGINE ───────────────────────────────────────────────
+    function render() {
+      const app = document.getElementById('app');
+      app.innerHTML = renderHeader() + renderBody();
+      bindEvents();
+    }
+
+    function renderHeader() {
+      return `
+        <div class="nova-header">
+          <div class="nova-header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div>
+            <h1>Nova Intelligence</h1>
+            <span>Proactive scheduling assistant</span>
+          </div>
+        </div>`;
+    }
+
+    function renderBody() {
+      switch (state.phase) {
+        case 'loading': return renderLoading();
+        case 'error': return renderError();
+        case 'ready': return renderPatientCard() + renderAgentMessage() + renderActions();
+        case 'drafting': return renderPatientCard() + renderAgentMessage() + renderDraftingState();
+        case 'editing': return renderPatientCard() + renderEmailEditor();
+        case 'sending': return renderPatientCard() + renderEmailEditor(true);
+        case 'sent': return renderPatientCard() + renderSuccess();
+        default: return '';
+      }
+    }
+
+    // ─── PHASE RENDERERS ─────────────────────────────────────────────
+
+    function renderLoading() {
+      return `
+        <div class="loading-state">
+          <div class="loading-dots"><div></div><div></div><div></div></div>
+          <p>Analyzing patient data…</p>
+        </div>`;
+    }
+
+    function renderError() {
+      return `
+        <div class="error-state">
+          <h3>Unable to load patient data</h3>
+          <p>${escHtml(state.error || 'An unexpected error occurred.')}</p>
+          <button onclick="location.reload()">Retry</button>
+        </div>`;
+    }
+
+    function renderPatientCard() {
+      const l = state.lead;
+      const name = `${l.firstName} ${l.lastName}`.trim() || 'Unknown Patient';
+      const score = parseFloat(l.noShowRiskScore) || 0;
+      const displayScore = score > 1 ? Math.round(score) : Math.round(score * 100);
+      const band = (l.riskBand || inferBand(displayScore)).toLowerCase();
+      const bandLabel = band.charAt(0).toUpperCase() + band.slice(1);
+
+      const apptDate = l.appointmentDateTime ? formatDate(l.appointmentDateTime) : '—';
+      const service = l.appointmentSubType || '—';
+      const slotType = l.slotType || '—';
+      const daysUntil = l.appointmentDateTime ? daysUntilAppt(l.appointmentDateTime) : null;
+      const daysLabel = daysUntil !== null ? (daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`) : '—';
+
+      const factors = l.contributingFactors
+        ? l.contributingFactors.split('|').map(f => f.trim()).filter(Boolean)
+        : [];
+
+      return `
+        <div class="patient-card">
+          <div class="patient-top">
+            <div>
+              <div class="patient-name">${escHtml(name)}</div>
+              <div class="patient-meta">${escHtml(l.email || 'No email on file')}${l.phone ? ' · ' + escHtml(l.phone) : ''}</div>
+            </div>
+            <div class="risk-badge ${band}">
+              <span class="score">${displayScore}</span> ${bandLabel} Risk
+            </div>
+          </div>
+          <div class="patient-details">
+            <div class="detail-item">
+              <div class="detail-label">Appointment</div>
+              <div class="detail-value">${escHtml(apptDate)}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Service</div>
+              <div class="detail-value">${escHtml(service)}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Slot / Timing</div>
+              <div class="detail-value">${escHtml(slotType)}${daysUntil !== null ? ' · ' + daysLabel : ''}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Prior No-Shows</div>
+              <div class="detail-value">${escHtml(l.priorNoShows || '0')}</div>
+            </div>
+            ${factors.length ? `
+            <div class="detail-item factors-row">
+              <div class="detail-label">Contributing Factors</div>
+              <div class="factors-tags">
+                ${factors.map(f => `<span class="factor-tag">${escHtml(f)}</span>`).join('')}
+              </div>
+            </div>` : ''}
+          </div>
+        </div>`;
+    }
+
+    function renderAgentMessage() {
+      const l = state.lead;
+      const name = l.firstName || 'this patient';
+      const score = parseFloat(l.noShowRiskScore) || 0;
+      const displayScore = score > 1 ? Math.round(score) : Math.round(score * 100);
+      const band = (l.riskBand || inferBand(displayScore)).toLowerCase();
+      const priorNoShows = parseInt(l.priorNoShows) || 0;
+      const slotType = l.slotType || '';
+      const daysUntil = l.appointmentDateTime ? daysUntilAppt(l.appointmentDateTime) : null;
+      const apptDate = l.appointmentDateTime ? formatDateShort(l.appointmentDateTime) : 'an upcoming appointment';
+
+      let message = '';
+
+      if (band === 'high') {
+        const details = [];
+        if (displayScore) details.push(`a risk score of <strong>${displayScore}</strong>`);
+        if (priorNoShows > 0) details.push(`<strong>${priorNoShows}</strong> prior no-show${priorNoShows > 1 ? 's' : ''}`);
+        if (slotType) details.push(`${slotType.toLowerCase() === 'evening' ? 'an' : 'a'} <strong>${slotType.toLowerCase()}</strong> appointment slot`);
+        
+        message = `<strong>${escHtml(name)}</strong> has ${details.join(', ')}`;
+        if (daysUntil !== null && daysUntil <= 7) {
+          message += ` — and the appointment on <strong>${escHtml(apptDate)}</strong> is ${daysUntil === 0 ? '<strong>today</strong>' : daysUntil === 1 ? '<strong>tomorrow</strong>' : `in <strong>${daysUntil} days</strong>`}`;
+        }
+        message += `. Based on this pattern, they're <strong>unlikely to attend</strong>. I'd recommend reaching out now.`;
+        if (l.email) {
+          message += ` Would you like me to draft a confirmation email to ${escHtml(name)}?`;
+        }
+      } else if (band === 'medium') {
+        message = `<strong>${escHtml(name)}</strong> shows a <strong>moderate</strong> risk pattern (score: ${displayScore})`;
+        if (priorNoShows > 0) message += ` with ${priorNoShows} prior no-show${priorNoShows > 1 ? 's' : ''}`;
+        message += `. Things aren't critical, but a courtesy reminder could help lock in the ${escHtml(apptDate)} appointment.`;
+        if (l.email) {
+          message += ` Want me to draft something quick?`;
+        }
+      } else {
+        message = `<strong>${escHtml(name)}</strong>'s risk profile looks good (score: ${displayScore}). Their ${escHtml(apptDate)} appointment should be fine, but I can prepare a courtesy reminder if you'd like.`;
+      }
+
+      return `
+        <div class="agent-message">
+          <div class="agent-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+            </svg>
+            Nova Intelligence
+          </div>
+          <div class="agent-text">${message}</div>
+          ${!l.email ? '<div class="no-email-note">No email address on file for this lead. Add an email in LeadSquared to enable outreach.</div>' : ''}
+        </div>`;
+    }
+
+    function renderActions() {
+      if (!state.lead.email) return '';
+      return `
+        <div class="actions">
+          <button class="btn btn-primary" id="btn-draft">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            Yes, draft an email
+          </button>
+          <button class="btn btn-ghost" id="btn-dismiss">Not now</button>
+        </div>`;
+    }
+
+    function renderDraftingState() {
+      return `
+        <div class="agent-message" style="text-align:center; padding: 24px;">
+          <div class="spinner-inline dark" style="width:20px;height:20px;margin:0 auto 10px;"></div>
+          <div style="font-size:13px;color:var(--text-secondary);">Drafting a personalized email for ${escHtml(state.lead.firstName)}…</div>
+        </div>`;
+    }
+
+    function renderEmailEditor(sending = false) {
+      const d = state.draft;
+      return `
+        <div class="email-editor">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            Email Draft — Review &amp; Edit
+          </h3>
+          <div class="email-field">
+            <label>To</label>
+            <input type="text" value="${escAttr(state.lead.email)}" disabled style="opacity:.65;" />
+          </div>
+          <div class="email-field">
+            <label>Subject</label>
+            <input type="text" id="email-subject" value="${escAttr(d.subject)}" ${sending ? 'disabled' : ''} />
+          </div>
+          <div class="email-field">
+            <label>Body</label>
+            <textarea id="email-body" ${sending ? 'disabled' : ''}>${escHtml(d.body)}</textarea>
+          </div>
+          <div class="actions">
+            <button class="btn btn-success" id="btn-send" ${sending ? 'disabled' : ''}>
+              ${sending
+                ? '<span class="spinner-inline"></span> Sending…'
+                : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Approve &amp; Send`}
+            </button>
+            <button class="btn btn-ghost" id="btn-regenerate" ${sending ? 'disabled' : ''}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+              Regenerate
+            </button>
+          </div>
+        </div>`;
+    }
+
+    function renderSuccess() {
+      const name = `${state.lead.firstName} ${state.lead.lastName}`.trim();
+      return `
+        <div class="success-card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            Email sent to ${escHtml(name)}
+          </h3>
+          <p>The confirmation email has been delivered and logged to ${escHtml(state.lead.firstName)}'s activity timeline in LeadSquared. No further action needed.</p>
+        </div>`;
+    }
+
+    // ─── EVENT BINDING ───────────────────────────────────────────────
+    function bindEvents() {
+      const btnDraft = document.getElementById('btn-draft');
+      const btnDismiss = document.getElementById('btn-dismiss');
+      const btnSend = document.getElementById('btn-send');
+      const btnRegen = document.getElementById('btn-regenerate');
+
+      if (btnDraft) btnDraft.addEventListener('click', handleDraft);
+      if (btnDismiss) btnDismiss.addEventListener('click', () => {
+        // Just collapse the actions
+        btnDismiss.closest('.actions').style.display = 'none';
+      });
+      if (btnSend) btnSend.addEventListener('click', handleSend);
+      if (btnRegen) btnRegen.addEventListener('click', handleDraft);
+    }
+
+    // ─── HANDLERS ────────────────────────────────────────────────────
+    async function handleDraft() {
+      state.phase = 'drafting';
+      render();
+
+      try {
+        const res = await fetch(`${API_BASE}/nova/draft-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lead: state.lead }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to generate draft');
+
+        state.draft = data.draft;
+        state.phase = 'editing';
+      } catch (err) {
+        state.error = err.message;
+        state.phase = 'error';
+      }
+      render();
+    }
+
+    async function handleSend() {
+      const subject = document.getElementById('email-subject').value;
+      const body = document.getElementById('email-body').value;
+
+      if (!subject.trim() || !body.trim()) return;
+
+      state.draft = { subject, body };
+      state.phase = 'sending';
+      render();
+
+      try {
+        const res = await fetch(`${API_BASE}/nova/send-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipientEmail: state.lead.email,
+            subject,
+            body,
+            patientName: `${state.lead.firstName} ${state.lead.lastName}`.trim(),
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to send email');
+
+        state.phase = 'sent';
+      } catch (err) {
+        state.error = err.message;
+        state.phase = 'error';
+      }
+      render();
+    }
+
+    // ─── INIT ────────────────────────────────────────────────────────
+    async function init() {
+      if (!prospectId) {
+        state.phase = 'error';
+        state.error = 'No prospect ID found in URL. Make sure ?pid= is set.';
+        render();
+        return;
+      }
+
+      render(); // show loading
+
+      try {
+        const res = await fetch(`${API_BASE}/nova/lead/${encodeURIComponent(prospectId)}`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to fetch lead data');
+
+        state.lead = data.lead;
+        state.phase = 'ready';
+      } catch (err) {
+        state.error = err.message;
+        state.phase = 'error';
+      }
+      render();
+    }
+
+    // ─── HELPERS ─────────────────────────────────────────────────────
+    function escHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str || '';
+      return d.innerHTML;
+    }
+    function escAttr(str) {
+      return (str || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function inferBand(score) {
+      if (score >= 65) return 'High';
+      if (score >= 35) return 'Medium';
+      return 'Low';
+    }
+    function formatDate(dt) {
+      try {
+        const d = new Date(dt);
+        return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+      } catch { return dt; }
+    }
+    function formatDateShort(dt) {
+      try {
+        const d = new Date(dt);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      } catch { return dt; }
+    }
+    function daysUntilAppt(dt) {
+      try {
+        const now = new Date();
+        const appt = new Date(dt);
+        const diff = Math.ceil((appt - now) / (1000 * 60 * 60 * 24));
+        return Math.max(0, diff);
+      } catch { return null; }
+    }
+
+    // ─── BOOT ────────────────────────────────────────────────────────
+    init();
+  </script>
+</body>
+</html>
